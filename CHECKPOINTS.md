@@ -17,8 +17,8 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 |---|---|---|---|---|
 | C0 | Repository initialized, catalog and design doc committed | M0 | done | `449a232` |
 | C1 | Compile-clean skeleton and package boundaries | M0 | done | `5051533` |
-| C2 | CLI root, `version`, and help | M0 | in progress | — |
-| C3 | Config type model and strict YAML decoding | M1 | todo (examples added) | — |
+| C2 | CLI root, `version`, and help | M0 | done | `834cc1b` |
+| C3 | Config type model and strict YAML decoding | M1 | in progress | — |
 | C4 | Validation rules and `kamui validate` | M1 | todo | — |
 | C5 | Resource registry and dependency DAG | M1 | todo | — |
 | C6 | `kamui plan --offline` and golden tests | M1 | todo | — |
@@ -27,12 +27,12 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 
 ## Validation findings (2026-11-05)
 
-- `go build ./...`, `go vet ./...`, and `go test ./...` pass.
-- `kamui version` currently prints an extra `test build` line because `cli.Execute` prints after the command finishes. Remove that debug print.
-- `internal/engine.go` is a leftover root-level `package internal` file that duplicates `internal/engine`. Delete it.
-- `make build` fails: `main_package_path = ./` should point at `./cmd`, and the Windows target currently uses `GOOS=darwin`.
-- The custom `help` command shadows Cobra's built-in help and requires an argument. Prefer Cobra's built-in help.
-- `examples/machine.yaml`, `examples/server.yaml`, and `examples/README.md` now exist and parse as valid YAML.
+- C2 CLI cleanup is done: `version` prints one line and the custom help command is gone.
+- `internal/engine.go` has been removed.
+- `make build` still fails: `main_package_path = ./` should point at `./cmd`, and the Windows target currently uses `GOOS=darwin`.
+- Latest commit `c62af8d` breaks the build: `internal/config/config.go` imports `path/filepath` and `gopkg.in/yaml.v3` without using them.
+- The config parser is incomplete and has unmarshalling issues; see C3.
+- `examples/machine.yaml`, `examples/server.yaml`, and `examples/README.md` exist and parse as valid YAML.
 
 ---
 
@@ -154,7 +154,26 @@ feat(cli): add root command and version
 
 ## C3 — Config type model and strict YAML decoding
 
-**Goal:** load `examples/server.yaml` and reject unknown fields.
+**Status:** in progress (commit `c62af8d`)
+
+**Goal:** load `examples/machine.yaml` with strict decoding, then add `examples/server.yaml`. Machine first keeps the checkpoint small.
+
+**Review findings from `c62af8d`**
+
+- Build is red: remove the unused `path/filepath` and `yaml` imports, or use them.
+- All YAML-bound struct fields must be exported. `apiVersion`, `kind`, `spec`,
+  `metadata.name`, and every field under `machineSpecification` are currently
+  unexported, so `yaml.v3` will ignore them.
+- `spec` cannot be an interface without custom unmarshalling. Read `kind`
+  first, then decode `spec` into `MachineSpec` or `ServerSpec`.
+- The example uses `provider.type`; the struct expects `provider.provider`.
+  Rename the field to `Type` with `yaml:"type"`.
+- The `specification` interface declares `specs()`, but the implementation
+  defines `spec()`. Remove the interface or make the methods match.
+- `Load` and `parseConfig` are empty. `Load` should return `(*Config, error)`;
+  `Parse(io.Reader)` makes the parser testable without touching the filesystem.
+- `ServerSpec` is still a placeholder. Either implement it in this checkpoint
+  or return a clear unsupported-kind error until the next commit.
 
 **Steps**
 
@@ -168,10 +187,12 @@ feat(cli): add root command and version
 
 **Acceptance**
 
-- A valid fixture decodes successfully.
-- An unknown top-level or resource field returns an error.
+- `examples/machine.yaml` decodes successfully into a typed `MachineSpec`.
+- An unknown top-level or machine-spec field returns an error.
+- `kind: Server` returns either a decoded `ServerSpec` or a clear
+  "not implemented yet" error until the server parser lands.
 - Tests run without network access.
-- `go test ./internal/config/...` passes.
+- `go test ./internal/config/...` passes and `go build ./...` is green.
 
 **Suggested commit**
 
