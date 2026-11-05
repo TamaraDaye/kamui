@@ -30,7 +30,7 @@ spec:
   resources:
     - id: admin-user
       type: user
-      name: deploy
+      names: deploy
       state: present
       groups: [sudo]
       shell: /bin/bash
@@ -61,7 +61,7 @@ spec:
 
     - id: nginx-service
       type: service
-      name: nginx
+      names: nginx
       state: running
       enabled: true
       depends_on: [base-packages, nginx-config]
