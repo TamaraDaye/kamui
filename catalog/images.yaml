@@ -1,0 +1,82 @@
+# Curated KVM/libvirt cloud-image catalog.
+# Entries are pinned to specific upstream artifacts, not floating "latest" aliases.
+# Catalog reviewed: 2026-10-26.
+# The provisioner must verify the digest before publishing an artifact into its cache.
+
+
+
+schema_version: 1
+
+images:
+  - id: ubuntu-24.04-lts-amd64-20261017
+    display_name: Ubuntu Server 24.04 LTS (Noble Numbat) - amd64
+    os_family: linux
+    distribution: ubuntu
+    release: "24.04"
+    release_name: noble
+    revision: "20261017"
+    architecture: x86_64
+    upstream_architecture: amd64
+    image_variant: server-cloud
+    disk_format: qcow2
+    source:
+      url: https://us.cloud-images.ubuntu.com/releases/releases/server/24.04/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img
+      filename: ubuntu-24.04-server-cloudimg-amd64.img
+      checksum_manifest_url: https://us.cloud-images.ubuntu.com/releases/releases/server/24.04/release-20261017/SHA256SUMS
+      checksum_signature_url: https://us.cloud-images.ubuntu.com/releases/releases/server/24.04/release-20261017/SHA256SUMS.gpg
+    integrity:
+      algorithm: sha256
+      digest: 04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94
+      digest_source_url: https://us.cloud-images.ubuntu.com/releases/releases/server/24.04/release-20261017/SHA256SUMS
+    provisioning:
+      cloud_init: true
+      suggested_default_user: ubuntu
+    upstream_page: https://cloud-images.ubuntu.com/releases/noble/release/
+
+  - id: debian-13-trixie-amd64-20261001-2618
+    display_name: Debian 13 (Trixie) Generic Cloud - amd64
+    os_family: linux
+    distribution: debian
+    release: "13"
+    release_name: trixie
+    revision: "20261001-2618"
+    architecture: x86_64
+    upstream_architecture: amd64
+    image_variant: genericcloud
+    disk_format: qcow2
+    source:
+      url: https://cloud.debian.org/cdimage/cloud/trixie/20261001-2618/debian-13-genericcloud-amd64-20261001-2618.qcow2
+      filename: debian-13-genericcloud-amd64-20261001-2618.qcow2
+    integrity:
+      algorithm: sha512
+      digest: f46f0671a6e5bdec5291ab8972bae2f10e5408c2f64a74078f11efc2f06a436a9d0313ed50e0472542eeabf780e9f7c792ac0a314c6c20507fcd9fd81b468c3d
+      digest_encoding: hex
+      digest_source_url: https://cloud-image-finder.debian.net/i/debian-13-genericcloud-amd64-20261001-2618
+    provisioning:
+      cloud_init: true
+      suggested_default_user: debian
+    upstream_page: https://cloud-image-finder.debian.net/i/debian-13-genericcloud-amd64-20261001-2618
+
+  - id: fedora-cloud-44-amd64-1.7
+    display_name: Fedora Cloud Base 44 - x86_64
+    os_family: linux
+    distribution: fedora
+    release: "44"
+    revision: "1.7"
+    architecture: x86_64
+    upstream_architecture: x86_64
+    image_variant: cloud-base-generic
+    disk_format: qcow2
+    source:
+      url: https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2
+      filename: Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2
+      checksum_manifest_url: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-44-1.7-x86_64-CHECKSUM
+    integrity:
+      algorithm: sha256
+      digest: 28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f
+      digest_source_url: https://fedoraproject.org/cloud/download/
+      signature: upstream_checksum_file_is_openpgp_signed
+    provisioning:
+      cloud_init: true
+      suggested_default_user: fedora
+    upstream_page: https://fedoraproject.org/cloud/download/
