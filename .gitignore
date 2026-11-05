@@ -1,2 +1,6 @@
 .sshkeys/
 .template.yaml 
+CHECKPOINTS.md
+Kamui.md
+go.sum
+bin/
