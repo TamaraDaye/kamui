@@ -1,7 +1,6 @@
 // Package config
 package config
 
-
 const APIVersion = "kamui/v1"
 
 type Config struct {
@@ -9,6 +8,14 @@ type Config struct {
 	Metadata   Metadata `yaml:"metadata"`
 	Kind       string   `yaml:"kind"`
 	Spec       any      `yaml:"spec"`
+}
+
+
+type document[T any] struct {
+	APIVersion string `yaml:"apiVersion"`
+	Kind string `yaml:"kind"`
+	Metadata Metadata `yaml:"metadata"`
+	Spec T `yaml:"spec"`
 }
 
 type MachineSpec struct {
@@ -20,7 +27,7 @@ type MachineSpec struct {
 }
 
 type ProviderSpec struct {
-	Type string `yaml:"provider"`
+	Type string `yaml:"type"`
 	URI  string `yaml:"uri"`
 }
 
@@ -46,13 +53,13 @@ type AccessSpec struct {
 }
 
 type NetworkSpec struct {
-	mode string `yaml:"mode"`
+	Mode string `yaml:"mode"`
 }
 
 type Resources struct {
 	ID                string   `yaml:"id"`
 	Type              string   `yaml:"type"`
-	Name              string   `yaml:"names,omitempty"`
+	Name              string   `yaml:"name,omitempty"`
 	Names             []string `yaml:"names,omitempty"`
 	State             string   `yaml:"state"`
 	Groups            []string `yaml:"groups,omitempty"`
@@ -65,15 +72,16 @@ type Resources struct {
 	Enabled           bool     `yaml:"enabled"`
 	Path              string   `yaml:"path"`
 	Mode              string   `yaml:"mode"`
+	Content           string   `yaml:"content"`
 }
 
 type Target struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
-	User string `yaml:"user"`
-	Auth Auth `yaml:"auth"`
-	HostKey  HostKey `yaml:"host_key"`
-	Become Become `yaml:"become"`
+	Host    string  `yaml:"host"`
+	Port    int     `yaml:"port"`
+	User    string  `yaml:"user"`
+	Auth    Auth    `yaml:"auth"`
+	HostKey HostKey `yaml:"host_key"`
+	Become  Become  `yaml:"become"`
 }
 
 type Auth struct {
@@ -91,6 +99,6 @@ type Become struct {
 }
 
 type ServerSpec struct {
-	Target    Target `yaml:"target"`
+	Target    Target      `yaml:"target"`
 	Resources []Resources `yaml:"resources"`
 }

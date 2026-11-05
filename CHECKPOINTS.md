@@ -30,8 +30,8 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 - C2 CLI cleanup is done: `version` prints one line and the custom help command is gone.
 - `internal/engine.go` has been removed.
 - `make build` still fails: `main_package_path = ./` should point at `./cmd`, and the Windows target currently uses `GOOS=darwin`.
-- Latest commit `c62af8d` breaks the build: `internal/config/config.go` imports `path/filepath` and `gopkg.in/yaml.v3` without using them.
-- The config parser is incomplete and has unmarshalling issues; see C3.
+- `go build ./...`, `go vet ./...`, and `go test ./...` now pass at commit `162a8a1`.
+- The parser builds, but it does not populate the typed `MachineSpec` or `ServerSpec`; `spec` currently decodes into `map[string]interface{}`. See C3.
 - `examples/machine.yaml`, `examples/server.yaml`, and `examples/README.md` exist and parse as valid YAML.
 
 ---
@@ -154,26 +154,31 @@ feat(cli): add root command and version
 
 ## C3 — Config type model and strict YAML decoding
 
-**Status:** in progress (commit `c62af8d`)
+**Status:** in progress (commit `162a8a1`)
 
 **Goal:** load `examples/machine.yaml` with strict decoding, then add `examples/server.yaml`. Machine first keeps the checkpoint small.
 
-**Review findings from `c62af8d`**
+**Review findings from `162a8a1`**
 
-- Build is red: remove the unused `path/filepath` and `yaml` imports, or use them.
-- All YAML-bound struct fields must be exported. `apiVersion`, `kind`, `spec`,
-  `metadata.name`, and every field under `machineSpecification` are currently
-  unexported, so `yaml.v3` will ignore them.
-- `spec` cannot be an interface without custom unmarshalling. Read `kind`
-  first, then decode `spec` into `MachineSpec` or `ServerSpec`.
-- The example uses `provider.type`; the struct expects `provider.provider`.
-  Rename the field to `Type` with `yaml:"type"`.
-- The `specification` interface declares `specs()`, but the implementation
-  defines `spec()`. Remove the interface or make the methods match.
-- `Load` and `parseConfig` are empty. `Load` should return `(*Config, error)`;
-  `Parse(io.Reader)` makes the parser testable without touching the filesystem.
-- `ServerSpec` is still a placeholder. Either implement it in this checkpoint
-  or return a clear unsupported-kind error until the next commit.
+- Build, vet, and tests pass.
+- Header parsing, `apiVersion` checking, and kind dispatch are on the right track.
+- **Typed spec is not populated.** `decodeStrict(data, cfg)` decodes `Config.Spec`
+  as `map[string]interface{}` because `Spec` is `any`. Decode a concrete
+  `machineDocument` or `serverDocument` with `Spec MachineSpec` /
+  `Spec ServerSpec`, then assign the result to `Config.Spec`.
+- `ProviderSpec.Type` has `yaml:"provider"`; the example uses `provider.type`.
+  Change the tag to `yaml:"type"`.
+- `NetworkSpec.mode` is unexported, so `network.mode` is ignored. Export it as
+  `Mode string \`yaml:"mode"\``.
+- `Metadata.Name` has no explicit tag. Add `yaml:"name"`.
+- `Resources.Name` uses `yaml:"names"`, which collides with `Names`. Use
+  `yaml:"name,omitempty"`. `SSHAuthorizedKeys` must be `[]string` to match the
+  example. `Content` is missing, so `examples/server.yaml` will fail strict
+  decoding once the typed spec path is fixed.
+- `Load` returns only an error and prints the config. It should return
+  `(*Config, error)` and leave printing to the CLI.
+- `decodeStrict` should reject trailing YAML documents.
+- No tests exist yet. The examples are ready to serve as the first fixtures.
 
 **Steps**
 

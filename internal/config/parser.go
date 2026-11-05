@@ -9,22 +9,39 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func Load(path string) error {
-	data, err := os.ReadFile(path)
+func decodeKind[T any](data []byte) (*Config, error) {
+	var doc document[T]
 
-	if err != nil {
-		return fmt.Errorf("couldn't open provided config %w", err)
+	if err := decodeStrict(data, &doc); err != nil {
+		return nil, err
 	}
 
-	cfg, err := Parse(bytes.NewReader(data))
+	return &Config {
+		APIVersion: doc.APIVersion,
+		Kind: doc.Kind, 
+		Metadata: doc.Metadata,
+		Spec: doc.Spec,
+	}, nil
+}
 
+
+func Load(path string) (*Config,  error)  {
+	f, err := os.Open(path)
 
 	if err != nil {
-		return fmt.Errorf("could not load config %w", err)
+		return nil, fmt.Errorf("couldn't open provided config %w", err)
+	}
+
+	defer f.Close()
+
+	cfg, err := Parse(f)
+
+	if err != nil {
+		return nil, fmt.Errorf("could not load config %w", err)
 	}
 
 	fmt.Println(cfg)
-	return nil
+	return cfg, nil
 }
 
 
@@ -48,39 +65,28 @@ func Parse(r io.Reader) (*Config, error ) {
 		return nil, fmt.Errorf("unsupported apiVersion %q", header.APIVersion)
 	}
 
-	cfg := &Config{}
-
-
 	switch header.Kind {
 	case "Machine":
-		cfg.Spec = &MachineSpec{}
+		return decodeKind[MachineSpec](data)
 	case "Server":
-		cfg.Spec = &ServerSpec{}
+		return decodeKind[ServerSpec](data)
 	default: 
-		return nil, fmt.Errorf("invalid header kind %q", header.Kind)
+		return nil, fmt.Errorf("invalid machine kind specified %q", header.Kind)
 
 	}
-
-	if err := decodeStrict(data, cfg); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
 }
 
-func decodeStrict(data []byte, cfg *Config) error {
+func decodeStrict(data []byte, out any) error {
 	r := bytes.NewReader(data)
-
 
 	decoder := yaml.NewDecoder(r)
 
 	decoder.KnownFields(true)
 
 
-	if err := decoder.Decode(cfg); err != nil {
+	if err := decoder.Decode(out); err != nil {
 		return err
 	}
 	return nil 
 }
-
 
