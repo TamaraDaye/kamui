@@ -18,7 +18,7 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 | C0 | Repository initialized, catalog and design doc committed | M0 | done | `449a232` |
 | C1 | Compile-clean skeleton and package boundaries | M0 | done | `5051533` |
 | C2 | CLI root, `version`, and help | M0 | done | `834cc1b` |
-| C3 | Config type model and strict YAML decoding | M1 | in progress | — |
+| C3 | Config type model and strict YAML decoding | M1 | done | pending commit |
 | C4 | Validation rules and `kamui validate` | M1 | todo | — |
 | C5 | Resource registry and dependency DAG | M1 | todo | — |
 | C6 | `kamui plan --offline` and golden tests | M1 | todo | — |
@@ -30,8 +30,10 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 - C2 CLI cleanup is done: `version` prints one line and the custom help command is gone.
 - `internal/engine.go` has been removed.
 - `make build` still fails: `main_package_path = ./` should point at `./cmd`, and the Windows target currently uses `GOOS=darwin`.
-- `go build ./...`, `go vet ./...`, and `go test ./...` now pass at commit `162a8a1`.
-- The parser builds, but it does not populate the typed `MachineSpec` or `ServerSpec`; `spec` currently decodes into `map[string]interface{}`. See C3.
+- `go build ./...`, `go vet ./...`, and `go test ./...` pass.
+- The parser now populates typed `MachineSpec` and `ServerSpec` through `decodeKind[T]`.
+- Config tests passing: machine example, server example, unknown field,
+  unsupported API version, unsupported kind, and malformed YAML.
 - `examples/machine.yaml`, `examples/server.yaml`, and `examples/README.md` exist and parse as valid YAML.
 
 ---
@@ -154,31 +156,30 @@ feat(cli): add root command and version
 
 ## C3 — Config type model and strict YAML decoding
 
-**Status:** in progress (commit `162a8a1`)
+**Status:** done (pending commit)
 
-**Goal:** load `examples/machine.yaml` with strict decoding, then add `examples/server.yaml`. Machine first keeps the checkpoint small.
+**Goal:** load `examples/machine.yaml` and `examples/server.yaml` with strict decoding.
 
-**Review findings from `162a8a1`**
+**Achieved**
 
-- Build, vet, and tests pass.
-- Header parsing, `apiVersion` checking, and kind dispatch are on the right track.
-- **Typed spec is not populated.** `decodeStrict(data, cfg)` decodes `Config.Spec`
-  as `map[string]interface{}` because `Spec` is `any`. Decode a concrete
-  `machineDocument` or `serverDocument` with `Spec MachineSpec` /
-  `Spec ServerSpec`, then assign the result to `Config.Spec`.
-- `ProviderSpec.Type` has `yaml:"provider"`; the example uses `provider.type`.
-  Change the tag to `yaml:"type"`.
-- `NetworkSpec.mode` is unexported, so `network.mode` is ignored. Export it as
-  `Mode string \`yaml:"mode"\``.
-- `Metadata.Name` has no explicit tag. Add `yaml:"name"`.
-- `Resources.Name` uses `yaml:"names"`, which collides with `Names`. Use
-  `yaml:"name,omitempty"`. `SSHAuthorizedKeys` must be `[]string` to match the
-  example. `Content` is missing, so `examples/server.yaml` will fail strict
-  decoding once the typed spec path is fixed.
-- `Load` returns only an error and prints the config. It should return
-  `(*Config, error)` and leave printing to the CLI.
-- `decodeStrict` should reject trailing YAML documents.
-- No tests exist yet. The examples are ready to serve as the first fixtures.
+- Typed decoding works through `decodeKind[T]`; both examples populate their
+  concrete spec types.
+- `TestParseMachineExample` and `TestParseServerExample` pass.
+- `TestUnknownField` proves `KnownFields(true)` rejects unknown fields inside
+  `spec`.
+- `TestUnsupportedAPIVersion`, `TestUnsupportedKind`, and `TestMalformedYAML`
+  pass.
+- `SSHAuthorizedKeys` was corrected to `[]string` so the server example decodes.
+- `Load` no longer prints the parsed config.
+
+**Non-blocking follow-ups**
+
+- Make `decodeStrict` reject trailing YAML documents.
+- Add the explicit `yaml:"name"` tag to `Metadata.Name` for clarity.
+- Improve error wrapping with the config path, for example
+  `fmt.Errorf("parse config %q: %w", path, err)`.
+
+**Next:** C4 — validation rules and `kamui validate`.
 
 **Steps**
 

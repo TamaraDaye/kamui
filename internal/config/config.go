@@ -10,12 +10,11 @@ type Config struct {
 	Spec       any      `yaml:"spec"`
 }
 
-
 type document[T any] struct {
-	APIVersion string `yaml:"apiVersion"`
-	Kind string `yaml:"kind"`
-	Metadata Metadata `yaml:"metadata"`
-	Spec T `yaml:"spec"`
+	APIVersion string   `yaml:"apiVersion"`
+	Kind       string   `yaml:"kind"`
+	Metadata   Metadata `yaml:"metadata"`
+	Spec       T        `yaml:"spec"`
 }
 
 type MachineSpec struct {
@@ -66,7 +65,7 @@ type Resources struct {
 	Group             string   `yaml:"group,omitempty"`
 	Shell             string   `yaml:"shell,omitempty"`
 	Home              string   `yaml:"home,omitempty"`
-	SSHAuthorizedKeys string   `yaml:"ssh_authorized_keys"`
+	SSHAuthorizedKeys []string `yaml:"ssh_authorized_keys"`
 	Owner             string   `yaml:"owner"`
 	Dependencies      []string `yaml:"depends_on"`
 	Enabled           bool     `yaml:"enabled"`

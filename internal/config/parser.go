@@ -16,16 +16,15 @@ func decodeKind[T any](data []byte) (*Config, error) {
 		return nil, err
 	}
 
-	return &Config {
+	return &Config{
 		APIVersion: doc.APIVersion,
-		Kind: doc.Kind, 
-		Metadata: doc.Metadata,
-		Spec: doc.Spec,
+		Kind:       doc.Kind,
+		Metadata:   doc.Metadata,
+		Spec:       doc.Spec,
 	}, nil
 }
 
-
-func Load(path string) (*Config,  error)  {
+func Load(path string) (*Config, error) {
 	f, err := os.Open(path)
 
 	if err != nil {
@@ -40,12 +39,10 @@ func Load(path string) (*Config,  error)  {
 		return nil, fmt.Errorf("could not load config %w", err)
 	}
 
-	fmt.Println(cfg)
 	return cfg, nil
 }
 
-
-func Parse(r io.Reader) (*Config, error ) {
+func Parse(r io.Reader) (*Config, error) {
 	data, err := io.ReadAll(r)
 
 	if err != nil {
@@ -54,7 +51,7 @@ func Parse(r io.Reader) (*Config, error ) {
 
 	var header struct {
 		APIVersion string `yaml:"apiVersion"`
-		Kind string `yaml:"kind"`
+		Kind       string `yaml:"kind"`
 	}
 
 	if err := yaml.Unmarshal(data, &header); err != nil {
@@ -70,7 +67,7 @@ func Parse(r io.Reader) (*Config, error ) {
 		return decodeKind[MachineSpec](data)
 	case "Server":
 		return decodeKind[ServerSpec](data)
-	default: 
+	default:
 		return nil, fmt.Errorf("invalid machine kind specified %q", header.Kind)
 
 	}
@@ -83,10 +80,8 @@ func decodeStrict(data []byte, out any) error {
 
 	decoder.KnownFields(true)
 
-
 	if err := decoder.Decode(out); err != nil {
 		return err
 	}
-	return nil 
+	return nil
 }
-
