@@ -3,6 +3,7 @@
 **Status:** Draft v0.2  
 **Last updated:** 2026-11-05  
 **Target release:** `v0.1.0` in 8 working weeks (2 calendar months)  
+**Build progress:** [CHECKPOINTS.md](CHECKPOINTS.md)  
 **Scope owner:** Kamui maintainers
 
 ---
@@ -703,7 +704,7 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 
 ### 14.3 Integration environment
 
-- `make integration` runs against libvirt locally.
+- The integration suite runs against libvirt locally through a documented command; a Makefile or task runner is optional.
 - The test harness provisions from the same catalog used by the product, which keeps the provider path exercised.
 - CI runs unit and static checks on every commit; integration runs on a self-hosted runner or nightly.
 - Each integration test destroys its VMs even on failure; a leak check fails the suite if orphan domains remain.
@@ -742,14 +743,14 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 - Commit the first working skeleton and remove placeholder dead code.
 - Freeze the `v1` config schema, result statuses, CLI verbs, and exit codes (this document).
 - Define core interfaces: `Transport`, `Resource`, `Target`, `Provider`, `StateStore`.
-- Add `Makefile` targets: `build`, `test`, `lint`, `integration`.
+- Define one-command local verification with plain `go` commands. A `Makefile` is optional and should be added only if repeated multi-step workflows justify it.
 - Add CI for `gofmt`, `go vet`, unit tests, and build.
 - Create `examples/server.yaml` and `examples/machine.yaml`; stop ignoring the example config.
 - Write ADR-001 through ADR-004.
 
 **Deliverables:** compiling CLI skeleton, interfaces, example configs, ADRs, green CI.
 
-**Gate:** `make check` passes; `kamui version` works; the config schema has no unresolved contradictions.
+**Gate:** `go build ./...`, `go vet ./...`, and `go test ./...` pass; `kamui version` works; the config schema has no unresolved contradictions.
 
 #### M1 — Config, validation, and planning (Weeks 1–2)
 
@@ -940,7 +941,7 @@ As of 2026-11-05:
 2. Rename `internal/vm-provisoner` to `internal/provider/libvirt` and fix the package name.
 3. Move the draft config to `examples/server.yaml`, remove it from `.gitignore`, and replace placeholder secrets.
 4. Add `examples/machine.yaml` and `docs/config-reference.md`.
-5. Add `Makefile`, CI, and the `docs/adr/` directory.
+5. Add CI and the `docs/adr/` directory. Add a task runner only if repeated commands justify it.
 6. Add local state paths (`runs/`, `cache/`) to `.gitignore`.
 
 ## Appendix B — Definition of done for any resource executor
