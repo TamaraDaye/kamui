@@ -54,6 +54,8 @@ func Parse(r io.Reader) (*Config, error ) {
 	switch header.Kind {
 	case "Machine":
 		cfg.Spec = &MachineSpec{}
+	case "Server":
+		cfg.Spec = &ServerSpec{}
 	default: 
 		return nil, fmt.Errorf("invalid header kind %q", header.Kind)
 

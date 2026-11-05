@@ -1,7 +1,6 @@
 // Package config
 package config
 
-import "net"
 
 const APIVersion = "kamui/v1"
 
@@ -19,7 +18,6 @@ type MachineSpec struct {
 	Access   AccessSpec   `yaml:"access"`
 	Network  NetworkSpec  `yaml:"network"`
 }
-
 
 type ProviderSpec struct {
 	Type string `yaml:"provider"`
@@ -51,25 +49,48 @@ type NetworkSpec struct {
 	mode string `yaml:"mode"`
 }
 
-
-type ServerSpec struct {
-	target Target
+type Resources struct {
+	ID                string   `yaml:"id"`
+	Type              string   `yaml:"type"`
+	Name              string   `yaml:"names,omitempty"`
+	Names             []string `yaml:"names,omitempty"`
+	State             string   `yaml:"state"`
+	Groups            []string `yaml:"groups,omitempty"`
+	Group             string   `yaml:"group,omitempty"`
+	Shell             string   `yaml:"shell,omitempty"`
+	Home              string   `yaml:"home,omitempty"`
+	SSHAuthorizedKeys string   `yaml:"ssh_authorized_keys"`
+	Owner             string   `yaml:"owner"`
+	Dependencies      []string `yaml:"depends_on"`
+	Enabled           bool     `yaml:"enabled"`
+	Path              string   `yaml:"path"`
+	Mode              string   `yaml:"mode"`
 }
-
 
 type Target struct {
-	Host  net.Addr `yaml:"host"`
-	Port int `yaml:"port"`
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
 	User string `yaml:"user"`
+	Auth Auth `yaml:"auth"`
+	HostKey  HostKey `yaml:"host_key"`
+	Become Become `yaml:"become"`
 }
 
-type Resources struct {
-	ID   string `yaml:"id"`
-	Type string `yaml:"type"`
-	Name string `yaml:"names,omitempty"`
-	Names []string `yaml:"names,omitempty"`
-	State string `yaml:"state"`
-	Groups []string `yaml:"groups"`
-	Group string `yaml:"group"`
-	Shell string `yaml:"shell"`
+type Auth struct {
+	PrivateKey string `yaml:"private_key"`
+}
+
+type HostKey struct {
+	Policy     string `yaml:"policy"`
+	KnownHosts string `yaml:"known_hosts"`
+}
+
+type Become struct {
+	Method string `yaml:"method"`
+	User   string `yaml:"user"`
+}
+
+type ServerSpec struct {
+	Target    Target `yaml:"target"`
+	Resources []Resources `yaml:"resources"`
 }
