@@ -1,0 +1,37 @@
+# Machine acquisition example for Kamui.
+#
+# This file describes HOW to obtain a machine. It does not describe the
+# machine's desired software state; that belongs in server.yaml.
+#
+# The catalog reference points at the digest-pinned image catalog in this repo.
+
+apiVersion: kamui/v1
+kind: Machine
+
+metadata:
+  name: web-01
+
+spec:
+  provider:
+    type: libvirt
+    uri: qemu:///system
+
+  image:
+    catalog: img-catalog/images.yaml
+    id: ubuntu-24.04-lts-amd64-20261017
+
+  machine:
+    vcpus: 2
+    memory_mb: 2048
+    disk_gb: 20
+
+  access:
+    ssh_user: ubuntu
+    private_key: ~/.ssh/id_ed25519
+    authorized_keys:
+      # Replace with the contents of your own public key, for example:
+      # cat ~/.ssh/id_ed25519.pub
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIReplaceMeWithYourPublicKey operator@workstation"
+
+  network:
+    mode: nat

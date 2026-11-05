@@ -5,7 +5,7 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 **Status legend:** `done` · `in progress` · `blocked` · `todo`
 
 **Current focus:** Slice 1 — Foundation and offline plan  
-**Next checkpoint:** C1 — Compile-clean skeleton and package boundaries
+**Next checkpoint:** C2 — finish CLI cleanup, then C3 config model
 
 **Scope note:** this is a 2-month resume project. The must-ship path is intentionally narrow: config/plan/apply/verify, SSH, four core executors, one libvirt VM, and a recorded demo. Should-ship items are listed separately and only start after C12.
 
@@ -16,12 +16,23 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 | ID | Increment | Milestone | Status | Commit |
 |---|---|---|---|---|
 | C0 | Repository initialized, catalog and design doc committed | M0 | done | `449a232` |
-| C1 | Compile-clean skeleton and package boundaries | M0 | in progress | — |
-| C2 | CLI root, `version`, and help | M0 | todo | — |
-| C3 | Config type model and strict YAML decoding | M1 | todo | — |
+| C1 | Compile-clean skeleton and package boundaries | M0 | done | `5051533` |
+| C2 | CLI root, `version`, and help | M0 | in progress | — |
+| C3 | Config type model and strict YAML decoding | M1 | todo (examples added) | — |
 | C4 | Validation rules and `kamui validate` | M1 | todo | — |
 | C5 | Resource registry and dependency DAG | M1 | todo | — |
 | C6 | `kamui plan --offline` and golden tests | M1 | todo | — |
+
+---
+
+## Validation findings (2026-11-05)
+
+- `go build ./...`, `go vet ./...`, and `go test ./...` pass.
+- `kamui version` currently prints an extra `test build` line because `cli.Execute` prints after the command finishes. Remove that debug print.
+- `internal/engine.go` is a leftover root-level `package internal` file that duplicates `internal/engine`. Delete it.
+- `make build` fails: `main_package_path = ./` should point at `./cmd`, and the Windows target currently uses `GOOS=darwin`.
+- The custom `help` command shadows Cobra's built-in help and requires an argument. Prefer Cobra's built-in help.
+- `examples/machine.yaml`, `examples/server.yaml`, and `examples/README.md` now exist and parse as valid YAML.
 
 ---
 
@@ -33,7 +44,7 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 
 - Initial git commit.
 - `Kamui.md` design and 8-week plan.
-- Curated `catalog/images.yaml`.
+- Curated `img-catalog/images.yaml`.
 - Provider scaffold under `internal/provider/`.
 - Empty placeholder files for config, engine, target, state, catalog, and CLI.
 
@@ -46,6 +57,8 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 ---
 
 ## C1 — Compile-clean skeleton and package boundaries
+
+**Status:** done (commit `5051533`; delete `internal/engine.go` as cleanup)
 
 **Goal:** settle package boundaries while the files are still empty, and get a green build.
 
@@ -103,6 +116,8 @@ chore: establish package boundaries and green build
 
 ## C2 — CLI root, `version`, and help
 
+**Status:** in progress
+
 **Goal:** a usable command surface before any business logic.
 
 **Steps**
@@ -113,14 +128,21 @@ chore: establish package boundaries and green build
 - Establish exit-code helpers (`0` success, `2` usage/config error).
 - Add one CLI test that runs the root command in-process.
 
+**Remaining before done**
+
+- Remove `fmt.Println("test build")` from `cli.Execute`.
+- Remove the custom `help` command and rely on Cobra's built-in help, or make it `cobra.NoArgs`.
+- Change the CLI test to assert `version` output and command errors, not just call `rootCmd.Execute()`.
+- Make `go run ./cmd version` print exactly one line.
+
 **Acceptance**
 
 ```bash
-go run ./cmd/kamui version
-go run ./cmd/kamui --help
+go run ./cmd version
+go run ./cmd --help
 ```
 
-Both exit `0`, and `version` prints a version string.
+Both exit `0`, and `version` prints exactly one version string.
 
 **Suggested commit**
 
@@ -142,7 +164,7 @@ feat(cli): add root command and version
 - Add defaults that are safe (for example, `port: 22`).
 - Keep validation separate from decoding for this checkpoint.
 - Add valid and invalid fixtures under `internal/config/testdata/`.
-- Add `examples/server.yaml` and `examples/machine.yaml`.
+- `examples/server.yaml` and `examples/machine.yaml` are already added; use them as the first decode fixtures.
 
 **Acceptance**
 

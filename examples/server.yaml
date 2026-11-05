@@ -1,0 +1,67 @@
+# Desired-state example for Kamui.
+#
+# This file describes WHAT the target machine must look like. It is
+# acquisition-independent: the host may have been created by libvirt, EC2, or
+# provisioned by hand.
+#
+# Replace the target host with the address returned by `kamui provision` or
+# with the address of any existing Linux VM that accepts the configured key.
+
+apiVersion: kamui/v1
+kind: Server
+
+metadata:
+  name: web-01
+
+spec:
+  target:
+    host: 192.168.122.45 # replace with the provisioned or existing VM address
+    port: 22
+    user: ubuntu
+    auth:
+      private_key: ~/.ssh/id_ed25519
+    host_key:
+      policy: strict
+      known_hosts: ~/.ssh/known_hosts
+    become:
+      method: sudo
+      user: root
+
+  resources:
+    - id: admin-user
+      type: user
+      name: deploy
+      state: present
+      groups: [sudo]
+      shell: /bin/bash
+      home: /home/deploy
+      ssh_authorized_keys:
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIReplaceMeWithYourPublicKey operator@workstation"
+
+    - id: base-packages
+      type: package
+      names: [nginx, git]
+      state: present
+
+    - id: nginx-config
+      type: file
+      path: /etc/nginx/sites-available/default
+      state: present
+      owner: root
+      group: root
+      mode: "0644"
+      content: |
+        server {
+          listen 80 default_server;
+          server_name _;
+          root /var/www/html;
+          index index.html;
+        }
+      depends_on: [base-packages]
+
+    - id: nginx-service
+      type: service
+      name: nginx
+      state: running
+      enabled: true
+      depends_on: [base-packages, nginx-config]

@@ -1,18 +1,36 @@
 package cli
 
 import (
-	"fmt"
+	"bytes"
 	"testing"
+	"strings"
 
 	// "github.com/spf13/cobra"
 )
 
+func executeCommand(args ...string) (string, error) {
+	buf := new(bytes.Buffer)
+	cmd := NewRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs(args)
 
-func TestRootCmd(t *testing.T) {
-	if err := rootCmd.Execute(); err != nil {
-		t.Error("rootCmd errored out ")
-	} else {
-		fmt.Println("passed with flying colors")
+	err := cmd.Execute()
+
+	return strings.TrimSpace(buf.String()), err
+}
+
+
+
+func TestVersionCmd(t *testing.T) {
+	out, err := executeCommand("version")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if out != "version 0.1.0" {
+		t.Errorf("got %q, want %q", out, "version 0.1.0")
 	}
 }
 

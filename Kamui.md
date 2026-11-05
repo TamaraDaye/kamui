@@ -200,7 +200,7 @@ This separation is the architectural answer to "independent of how the machine w
 | `internal/transport/ssh` | Connection lifecycle, command execution, file upload/download, sudo wrapper. |
 | `internal/target` | Capability probing and target fingerprinting. |
 | `internal/state` | Atomic, locked persistence of runs and last observed results. |
-| `internal/catalog` | Load `catalog/images.yaml`, verify digests, manage the image cache. |
+| `internal/catalog` | Load `img-catalog/images.yaml`, verify digests, manage the image cache. |
 | `internal/provider/libvirt` | Domain lifecycle, cloud-init seed, readiness wait, cleanup. |
 | `internal/provider/ec2` | Post-`v0.1.0`; must implement the same provider interface. |
 
@@ -319,7 +319,7 @@ spec:
     type: libvirt
     uri: qemu:///system
   image:
-    catalog: catalog/images.yaml
+    catalog: img-catalog/images.yaml
     id: ubuntu-24.04-lts-amd64-20261017
   machine:
     vcpus: 2
@@ -614,7 +614,7 @@ Provider implementations must return the same `Target` contract. The engine must
 
 ### 11.2 Libvirt provider (`v0.1.0`)
 
-1. Load `catalog/images.yaml` and select a pinned image by ID.
+1. Load `img-catalog/images.yaml` and select a pinned image by ID.
 2. Download into the cache if absent; verify the catalog digest before use.
 3. Generate a cloud-init seed with the configured SSH user/key and hostname.
 4. Create the domain with `libvirt.org/go/libvirt` and `libvirt.org/go/libvirtxml`.
@@ -645,13 +645,13 @@ Same interface. Requires AWS credential resolution, AMI selection, security grou
 ## 13. Repository layout
 
 ```text
-cmd/kamui/main.go                  # thin entry point
+cmd/main.go                        # thin entry point
 
 internal/
   cli/                             # commands, flags, rendering, exit codes
   config/                          # strict YAML decode, defaults, validation
   plan/                            # DAG construction, topological sort, actions
-  engine/                          # execution, concurrency, cancellation, results
+  engine/                          # execution, cancellation, results
   resource/
     resource.go                    # Resource interface and registry
     pkg/                           # apt/dnf package executor
@@ -664,22 +664,25 @@ internal/
   state/                           # run records, locks, last observed state
   catalog/                         # catalog loading and digest verification
   provider/
-    libvirt/                       # libvirt machine provider
-    ec2/                           # post-v0.1.0
+    libvirt.go                     # libvirt machine provider
+    ec2.go                         # post-v0.1.0
 
-catalog/images.yaml                # curated, pinned image catalog
+img-catalog/images.yaml            # curated, pinned image catalog
 examples/
-  server.yaml
   machine.yaml
+  server.yaml
+  README.md
 test/
   integration/                     # real-VM tests, build-tagged
   fixtures/                        # configs and golden plan output
 docs/
   config-reference.md
   adr/
+Makefile                           # optional convenience targets
+CHECKPOINTS.md                     # incremental build tracker
 ```
 
-The current `internal/vm-provisoner` directory is a placeholder and should be renamed to `internal/provider/libvirt` during Week 1. The package name should be `libvirtprovider` or `vmprovisioner`, not the misspelled `vmprovisoner`.
+The provider files currently live directly in `internal/provider/`. If the provider grows, split it into `internal/provider/libvirt/` and `internal/provider/ec2/` without changing the provider interface.
 
 ---
 
@@ -728,7 +731,7 @@ Should-ship tests, required only if the feature is implemented:
 - One primary engineer, full-time equivalent.
 - The schedule is **8 working weeks**. Week 8 includes buffer and release work.
 - Calendar anchor: if work starts on **Monday 9 November 2026**, `v0.1.0` lands by **Friday 2 January 2027**. If the holiday period reduces capacity, either move the release to 9 January 2027 or cut the "Should ship" items; do not cut verification, security, or hardening work.
-- Existing libvirt dependencies and `catalog/images.yaml` are reused; they are not rebuilt from scratch.
+- Existing libvirt dependencies and `img-catalog/images.yaml` are reused; they are not rebuilt from scratch.
 
 ### 15.2 Timeline at a glance
 
@@ -939,20 +942,23 @@ In rough priority order:
 
 As of 2026-11-05:
 
-- `cmd/main.go` is an empty entry point.
-- `internal/vm-provisoner/` is a placeholder (and misspelled) package importing libvirt and libvirtxml.
-- `catalog/images.yaml` contains a curated, digest-pinned image catalog for Ubuntu, Debian, and Fedora.
-- `.template.yaml` is an early desired-state sketch, currently ignored by git.
-- The repository has no commits yet.
+- `cmd/main.go` calls `cli.Execute()`.
+- `internal/cli` has Cobra root, `version`, and `help` commands.
+- `internal/config`, `internal/engine`, `internal/catalog`, `internal/state`, `internal/target`, and `internal/provider` are package scaffolds.
+- `go build ./...`, `go vet ./...`, and `go test ./...` pass.
+- `img-catalog/images.yaml` contains a curated, digest-pinned image catalog for Ubuntu, Debian, and Fedora.
+- `examples/machine.yaml`, `examples/server.yaml`, and `examples/README.md` exist.
+- `.template.yaml` is the legacy desired-state sketch and remains ignored by git.
+- The repository has three commits, including the initial skeleton and CLI scaffold.
 
 ### Immediate cleanup before M0 closes
 
-1. Make the first commit with the current skeleton and catalog.
-2. Rename `internal/vm-provisoner` to `internal/provider/libvirt` and fix the package name.
-3. Move the draft config to `examples/server.yaml`, remove it from `.gitignore`, and replace placeholder secrets.
-4. Add `examples/machine.yaml` and `docs/config-reference.md`.
-5. Add CI and the `docs/adr/` directory. Add a task runner only if repeated commands justify it.
-6. Add local state paths (`runs/`, `cache/`) to `.gitignore`.
+1. Delete the leftover `internal/engine.go` root-level package file.
+2. Remove the `test build` debug print from `cli.Execute`; rely on Cobra's built-in help.
+3. Fix `Makefile`: build `./cmd`, and use `GOOS=windows` for the Windows artifact.
+4. Add CI and the `docs/adr/` directory.
+5. Add local state paths (`runs/`, `cache/`) and build output (`bin/`) to `.gitignore`.
+6. Remove `.template.yaml` once the two example kinds fully replace it.
 
 ## Appendix B — Definition of done for any resource executor
 
