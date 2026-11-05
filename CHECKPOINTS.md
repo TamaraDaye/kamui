@@ -7,6 +7,8 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 **Current focus:** Slice 1 — Foundation and offline plan  
 **Next checkpoint:** C1 — Compile-clean skeleton and package boundaries
 
+**Scope note:** this is a 2-month resume project. The must-ship path is intentionally narrow: config/plan/apply/verify, SSH, four core executors, one libvirt VM, and a recorded demo. Should-ship items are listed separately and only start after C12.
+
 ---
 
 ## Checkpoint overview
@@ -248,6 +250,35 @@ feat(cli): add offline plan output
 ```
 
 **Slice 1 complete when C1–C6 are done.** At that point, the config and planning contract is frozen enough to start the SSH transport (Slice 2).
+
+---
+
+## Post-Slice-1 checkpoints (provisional)
+
+These are the trimmed must-ship path. Details are intentionally lighter until Slice 1 closes.
+
+| ID | Increment | Milestone | Status |
+|---|---|---|---|
+| C7 | SSH transport + `kamui inspect` on Ubuntu/Debian | M2 | todo |
+| C8 | `file` executor end-to-end: Check/Plan/Apply/Verify | M3 | todo |
+| C9 | `package` and `user` executors | M3 | todo |
+| C10 | `service` executor + reporting + `status` | M4 | todo |
+| C11 | Interruption handling + safe re-run | M5 | todo |
+| C12 | Libvirt single-VM provision/destroy + demo | M6 | todo |
+
+### Optional should-ship checkpoints
+
+Only start these after C12 passes, or when the must-ship path is ahead of schedule:
+
+| ID | Increment |
+|---|---|
+| S1 | `group`, `directory`, and `firewall` executors |
+| S2 | Full `history` and retention |
+| S3 | Multi-target fan-out and bounded parallelism |
+| S4 | Fedora 44 / dnf coverage |
+| S5 | Drift report polish, resume hints, package version pinning |
+
+**Resume-project rule:** a small, complete, verified story beats a broad, half-finished one. Prefer C12 plus a recorded demo over starting S1–S5 early.
 
 ---
 

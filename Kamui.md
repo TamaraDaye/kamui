@@ -24,15 +24,14 @@ The engine **must verify the observed outcome after applying changes**. It must 
 
 ### What ships in the first 2 months
 
-- A Go CLI: `validate`, `inspect`, `plan`, `apply`, `status`, `history`, `provision`, `destroy`.
+- A Go CLI: `validate`, `inspect`, `plan`, `apply`, `status`, `provision`, `destroy`.
 - SSH transport with host-key verification, key/agent auth, sudo, and safe file transfer.
-- Declarative resources: packages, users, groups, files, directories, systemd services, firewall rules.
+- Core declarative resources: packages, users, files, and systemd services.
 - Check → Plan → Apply → Verify lifecycle for every resource.
-- Idempotent applies, structured human/JSON reports, persisted run history.
-- Multiple targets and bounded parallel execution.
-- A libvirt provider that creates a VM from the curated image catalog, bootstraps SSH, and hands the target to the same engine.
+- Idempotent applies, structured human/JSON reports, and a minimal last-run status record.
+- A libvirt provider that creates one VM from the curated image catalog, bootstraps SSH, and hands the target to the same engine.
 
-EC2, remote state, scheduling, and a web UI are explicitly **after** `v0.1.0`.
+Should-ship if time allows: group/directory/firewall resources, Fedora/dnf, full history, multi-target execution, and bounded parallelism. EC2, remote state, scheduling, and a web UI are explicitly **after** `v0.1.0`.
 
 ---
 
@@ -81,22 +80,24 @@ EC2, remote state, scheduling, and a web UI are explicitly **after** `v0.1.0`.
 - YAML config parsing, strict validation, defaults, and actionable errors.
 - Dependency-aware execution plan with cycle detection.
 - Read-only `inspect` of OS, architecture, package manager, init system, firewall backend, and sudo capability.
-- Resource executors: package, user, group, file, directory, systemd service, firewall.
+- Core resource executors: package, user, file, and systemd service.
 - Apply with per-resource verification and idempotency.
 - Human-readable and JSON output; stable exit codes.
-- Persistent run history and `status`/`history` commands.
-- Multi-target fan-out and bounded parallel execution.
+- `status` backed by a minimal local last-run record.
 - Safe re-run after interruption; no duplicate or half-written resources.
-- Libvirt provider: catalog lookup, digest verification, domain creation, cloud-init SSH bootstrap, destroy, orphan cleanup.
-- Unit tests, fake-transport tests, and a real-VM integration matrix for Ubuntu, Debian, and Fedora.
-- Documentation, example configs, and a repeatable demo.
+- Libvirt provider: catalog lookup, digest verification, single-VM creation, cloud-init SSH bootstrap, destroy, orphan cleanup.
+- Unit tests, fake-transport tests, and a real-VM integration path for Ubuntu 24.04 and Debian 13.
+- Documentation, example configs, and one recorded end-to-end demo.
 
 ### Should ship if the schedule holds
 
+- Additional resource executors: group, directory, and firewall.
+- Fedora 44 / dnf integration coverage.
+- Multi-target fan-out and bounded parallel execution.
+- Full run history, retention, and query commands.
 - Basic drift report in `plan` output.
 - Resume hints for interrupted runs (not full checkpoint replay).
 - Package version pinning.
-- An EC2 provider spike behind a feature flag.
 
 ### Won't ship in this window
 
@@ -163,7 +164,7 @@ This separation is the architectural answer to "independent of how the machine w
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Execution engine                          │
 │  Check -> Plan -> Apply -> Verify -> Result                     │
-│  bounded parallelism, dependency barriers, interruption safety  │
+│  sequential by default, optional workers, interruption safety   │
 └───────────────┬───────────────────────────────┬─────────────────┘
                 │                               │
                 ▼                               ▼
@@ -194,7 +195,7 @@ This separation is the architectural answer to "independent of how the machine w
 | `internal/cli` | Parse commands/flags, load config, render output, map errors to exit codes. |
 | `internal/config` | Strict YAML decode, defaults, validation, typed resource model. |
 | `internal/plan` | Build the resource graph, infer/validate dependencies, topologically sort, produce actions. |
-| `internal/engine` | Execute plans, enforce ordering/parallelism, collect results, handle cancellation. |
+| `internal/engine` | Execute plans, enforce ordering, collect results, handle cancellation, and optionally add bounded parallelism. |
 | `internal/resource/*` | One package per resource type; implements `Check`, `Plan`, `Apply`, `Verify`. |
 | `internal/transport/ssh` | Connection lifecycle, command execution, file upload/download, sudo wrapper. |
 | `internal/target` | Capability probing and target fingerprinting. |
@@ -211,7 +212,7 @@ This separation is the architectural answer to "independent of how the machine w
 3. Connect over SSH and inspect capabilities.
 4. For each resource, run Check (read-only).
 5. Build the dependency DAG and compute actions (noop/create/update/delete/replace).
-6. Render plan; in apply mode, execute in topological order with bounded parallelism.
+6. Render plan; in apply mode, execute in topological order. Start sequentially; add bounded parallelism only as a should-ship feature.
 7. For each action: Apply, then Verify by re-reading observed state.
 8. Aggregate results: changed, unchanged, failed, skipped, incomplete.
 9. Persist the run record and print the report.
@@ -226,7 +227,7 @@ This separation is the architectural answer to "independent of how the machine w
 | ADR-002 | Every resource implements Check/Plan/Apply/Verify. | Makes idempotency and verification structural, not optional. |
 | ADR-003 | Check live target state during `plan`. | Prevents plans based on stale local state. `--offline` is available for structural plans only. |
 | ADR-004 | Local state is history, not authority. | Supports recovery and auditing without becoming a distributed-state problem. |
-| ADR-005 | Bounded, dependency-aware parallelism. | Useful speedup without unsafe concurrent mutation of the same resource. |
+| ADR-005 | Sequential execution by default; bounded, dependency-aware parallelism is should-ship. | Avoids unsafe concurrent mutation and keeps the must-ship engine simple; the interface leaves room for workers later. |
 | ADR-006 | SSH via Go's `x/crypto/ssh` plus SFTP. | Full control over auth, host keys, timeouts, and testability. |
 | ADR-007 | Strict host-key verification by default. | Prevents silent machine substitution. TOFU must be explicit. |
 
@@ -352,15 +353,17 @@ spec:
 
 ### 6.4 Resource types in `v0.1.0`
 
-| Type | Required fields | Key behavior |
-|---|---|---|
-| `package` | `names`, `state` | Install/remove with apt or dnf; verify with the package database. |
-| `user` | `name`, `state` | Create/update user, groups, shell, home, authorized keys. |
-| `group` | `name`, `state` | Create/remove group; verify with `getent`. |
-| `file` | `path`, `state` | Atomic content write, owner/group/mode; hash verification. |
-| `directory` | `path`, `state` | Create/remove directory, recursive mode/owner options. |
-| `service` | `name`, `state` | systemd enable/start/stop/disable; verify enabled and active. |
-| `firewall` | `default_inbound`, `allowed_inbound_ports` | Detect ufw/firewalld; apply and re-read rules. |
+| Type | Tier | Required fields | Key behavior |
+|---|---|---|---|
+| `package` | must | `names`, `state` | Install/remove with apt; verify with the package database. |
+| `user` | must | `name`, `state` | Create/update user, groups, shell, home, authorized keys. |
+| `file` | must | `path`, `state` | Atomic content write, owner/group/mode; hash verification. |
+| `service` | must | `name`, `state` | systemd enable/start/stop/disable; verify enabled and active. |
+| `group` | should | `name`, `state` | Create/remove group; verify with `getent`. |
+| `directory` | should | `path`, `state` | Create/remove directory, recursive mode/owner options. |
+| `firewall` | should | `default_inbound`, `allowed_inbound_ports` | Detect ufw/firewalld; apply and re-read rules. |
+
+`dnf`/Fedora support is a should-ship item. The must-ship path targets apt-based Ubuntu 24.04 and Debian 13.
 
 Planned after `v0.1.0`: `package_repo`, `template`, `mount`, `cron`, `sysctl`, and a deliberate `exec` escape hatch with explicit changed-when semantics.
 
@@ -453,6 +456,8 @@ This is a release-blocking test, not a nice-to-have. Each executor owns a test t
 
 ### 7.6 Concurrency
 
+Concurrency is a should-ship feature. The must-ship engine executes the plan sequentially; the interface should allow adding workers later without changing resource executors.
+
 - Workers default to `min(4, number of independent resources)`; configurable with `--parallel`.
 - A resource never runs until all its dependencies are complete.
 - Resources that touch the same path, service, or package set are serialized even without an explicit edge.
@@ -502,9 +507,9 @@ Inspection is cached for the duration of a run and stored with the run record. A
 
 ### 8.3 Supported targets for `v0.1.0`
 
-- Ubuntu 24.04 LTS (apt, systemd, ufw)
-- Debian 13 (apt, systemd, ufw)
-- Fedora 44 (dnf, systemd, firewalld)
+- **Must:** Ubuntu 24.04 LTS (apt, systemd, ufw).
+- **Must:** Debian 13 (apt, systemd, ufw).
+- **Should:** Fedora 44 (dnf, systemd, firewalld).
 
 Other systemd-based distributions may work but are not release-blocking.
 
@@ -586,6 +591,7 @@ Behavior notes:
 - `inspect` is read-only on the target.
 - `plan` connects and inspects by default; `--offline` validates structure and renders an unknown-state plan.
 - `apply` prints the plan and asks for confirmation unless `--auto-approve` is set.
+- `status` reports the most recent run and is must-ship. `history` and `--parallel` are should-ship; without them, apply runs sequentially and status reads the latest local record.
 - `--json` is stable, documented, and suitable for CI.
 - No command prints private keys, tokens, or secret file contents.
 
@@ -687,20 +693,24 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 | Unit | Planner ordering, cycle detection, inference, action selection | In-memory fake resources. |
 | Unit | Executors | Fake transport returning scripted observed states and command results. |
 | Contract | Transport behavior, timeouts, quoting, upload atomicity | Fake SSH server or interface-level fakes. |
-| Integration | Real distro behavior, package manager, systemd, firewall | Disposable libvirt VMs for Ubuntu, Debian, Fedora. |
-| End-to-end | Provision → apply → verify → history → destroy | Scripted demo run. |
+| Integration | Real distro behavior, package manager, systemd | Disposable libvirt VMs for Ubuntu and Debian; Fedora if the should-ship dnf path lands. |
+| End-to-end | Provision → apply → verify → status → destroy | Scripted demo run. |
 | Failure injection | SSH drop, sudo denial, bad package, failing service, bad host key | Scripted faults. |
 | Security | Secret redaction, host-key mismatch, unsafe quoting | Regression tests. |
 
 ### 14.2 Release-blocking tests
 
 1. **Idempotency:** apply twice; the second run reports zero `changed`.
-2. **Verification:** deliberately corrupt a file, stop a service, remove a package, and close a firewall port; the next plan detects drift and apply fixes it.
+2. **Verification:** deliberately corrupt a file, stop a service, and remove a package; the next plan detects drift and apply fixes it.
 3. **Dependency failure:** fail a package install and confirm dependants are `skipped`, not `failed` or falsely successful.
 4. **Interruption:** kill apply mid-run, re-run, and confirm convergence with no half-written files.
 5. **Host-key safety:** a changed host key aborts with exit code `3`.
 6. **Secret safety:** scan all output and state for private-key material and secret content.
-7. **Multi-target isolation:** a failure on one target does not corrupt or block the other target's state.
+
+Should-ship tests, required only if the feature is implemented:
+
+7. **Firewall drift:** close a managed port and confirm the next plan detects and reopens it.
+8. **Multi-target isolation:** a failure on one target does not corrupt or block the other target's state.
 
 ### 14.3 Integration environment
 
@@ -727,10 +737,10 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 | 1 | Contracts, repo skeleton, config model, plan skeleton | **M0 complete**, **M1 in progress** |
 | 2 | Validation, DAG/plan, SSH transport start | **M1 complete** |
 | 3 | SSH transport, inspection, first executors | **M2 complete** |
-| 4 | Packages, users/groups, files/directories | **M3 in progress** |
-| 5 | Core executors complete, services and firewall start | **M3 complete** |
-| 6 | Verification, reporting, state/history | **M4 complete** |
-| 7 | Multi-target, parallelism, recovery, libvirt start | **M5 complete** |
+| 4 | Packages, users, and files | **M3 in progress** |
+| 5 | Core executors complete; services and verification start | **M3 complete** |
+| 6 | Verification, reporting, and last-run status | **M4 complete** |
+| 7 | Recovery, optional history/multi-target, libvirt start | **M5 complete** |
 | 8 | Libvirt end-to-end, hardening, docs, release | **M6 complete / v0.1.0** |
 
 ### 15.3 Milestone details
@@ -782,57 +792,55 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 - `kamui inspect` with human and JSON output.
 - Fake transport for unit tests; real-VM smoke test.
 
-**Deliverables:** reliable SSH layer; inspection output for all three supported distros.
+**Deliverables:** reliable SSH layer; inspection output for Ubuntu 24.04 and Debian 13. Fedora 44 is should-ship.
 
-**Gate:** connect/inspect works on Ubuntu, Debian, and Fedora; bad host key and bad auth fail with exit code `3`; command-quoting tests pass.
+**Gate:** connect/inspect works on Ubuntu and Debian; bad host key and bad auth fail with exit code `3`; command-quoting tests pass.
 
 #### M3 — Core resource executors (Weeks 3–5)
 
 **Tasks**
 
 - Resource lifecycle and result plumbing in the engine.
-- `package`: apt and dnf, install/remove, verify via package database.
-- `user` and `group`: create/update/delete, groups, shell, home, authorized keys.
-- `file` and `directory`: content, mode, owner, group, atomic writes, recursive directories.
+- `package`: apt install/remove, verify via the package database. Add dnf only if Fedora is in scope.
+- `user`: create/update/delete, groups, shell, home, authorized keys.
+- `file`: content, mode, owner, group, atomic writes.
 - Per-resource dependency and conflict handling.
 - Idempotency tests for every executor.
 - First end-to-end scenario: admin user + packages + config file.
 
-**Deliverables:** five resource executors; scenario passes on the distro matrix.
+**Deliverables:** three core resource executors; scenario passes on Ubuntu and Debian.
 
 **Gate:** second apply is entirely `unchanged`; failures are isolated to their dependency branch; no unverified success.
 
-#### M4 — Services, firewall, verification, and reporting (Weeks 5–6)
+#### M4 — Services, verification, and reporting (Weeks 5–6)
 
 **Tasks**
 
 - `service`: systemd enable/disable, start/stop/restart, active-state wait with retries.
-- `firewall`: detect ufw/firewalld, apply default policy and ports, re-read rules.
 - Verification evidence captured per resource.
 - Human report with stable ordering and summary counts.
 - JSON report schema and exit-code mapping.
 - Drift demonstration: mutate the target manually, then plan/apply.
-- Failure-injection tests for service and firewall.
+- Failure-injection tests for service and verification.
+- Should-ship: `group`, `directory`, and `firewall` executors.
 
-**Deliverables:** complete canonical scenario converges; reports are accurate under partial failure.
+**Deliverables:** canonical scenario with package, user, file, and service converges; reports are accurate under partial failure.
 
-**Gate:** all seven resource types work end-to-end; verification failure forces `failed`; exit codes match the documented contract.
+**Gate:** the four core resource types work end-to-end; verification failure forces `failed`; exit codes match the documented contract. Extra executors do not block this gate.
 
-#### M5 — State, history, multi-target, and recovery (Weeks 6–7)
+#### M5 — State, status, and recovery (Weeks 6–7)
 
 **Tasks**
 
 - Atomic, permissioned state store with per-target locking.
-- Run records, target fingerprints, config hashes.
-- `kamui status` and `kamui history`.
-- Multi-target fan-out with per-target isolation.
-- Bounded parallelism with dependency barriers and resource-conflict serialization.
+- Minimal last-run record with target fingerprint and config hash.
+- `kamui status`.
 - Interruption handling: partial run record, `incomplete` status, safe re-run.
-- Concurrency and lock tests.
+- Should-ship: full `history`, multi-target fan-out, bounded parallelism, and concurrency tests.
 
-**Deliverables:** two-target parallel run; kill-and-rerun test; accurate history.
+**Deliverables:** `status` from the last run; kill-and-rerun test. Full history and multi-target only if the schedule holds.
 
-**Gate:** interrupting a run never yields a false success; a second apply cannot run concurrently on the same target; independent targets do not block each other.
+**Gate:** interrupting a run never yields a false success; a second apply cannot run concurrently on the same target. Multi-target isolation is only required if that should-ship item is implemented.
 
 #### M6 — Libvirt provider and `v0.1.0` release (Weeks 7–8)
 
@@ -863,9 +871,10 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 ### 15.5 `v0.1.0` release criteria
 
 - [ ] All "Must ship" scope is complete.
-- [ ] Idempotency, verification, interruption, host-key, secret, and multi-target tests are green.
-- [ ] Ubuntu 24.04, Debian 13, and Fedora 44 integration suites pass.
+- [ ] Idempotency, verification, interruption, host-key, and secret tests are green.
+- [ ] Ubuntu 24.04 and Debian 13 integration suites pass. Fedora 44 is required only if the should-ship dnf path lands.
 - [ ] Canonical example and libvirt demo run from a clean checkout.
+- [ ] Any should-ship feature that ships has its own tests; unfinished should-ship work is documented as deferred.
 - [ ] No known high-severity security issue in the transport, sudo, or secret-handling paths.
 - [ ] CLI help, config reference, quick start, and troubleshooting docs exist.
 - [ ] `go vet`, formatting, and unit tests pass in CI.
@@ -877,15 +886,15 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Distro/package-manager differences | Executors work on one distro only | Capability detection; apt/dnf first-class; three-distro integration matrix. |
+| Distro/package-manager differences | Executors work on one distro only | Capability detection; apt first-class; add dnf only with Fedora coverage and a two-distro-plus-Fedora matrix. |
 | Sudo requires a password | Every apply fails late | Preflight `sudo -n` check with an actionable error; document the requirement. |
 | SSH host-key handling blocks users | Users disable safety | Strict default plus a documented, explicit TOFU path; clear mismatch diagnostics. |
 | systemd/firewall state is eventually consistent | False verification failures | Bounded retries with backoff; re-read after settle time. |
 | Service or firewall verification is flaky | CI instability | Deterministic fixtures; retry only verification, never apply. |
-| Parallel apply causes conflicts | Corrupted target state | Dependency barriers; serialize same-path/service/package resources; per-target lock. |
+| Parallel apply causes conflicts (should-ship only) | Corrupted target state | Keep sequential apply as the default; if parallelism lands, add dependency barriers, conflict serialization, and a per-target lock. |
 | Interruption leaves unknown state | Silent corruption | Atomic writes, `incomplete` status, re-check on every run, signal handling. |
 | Libvirt environment variance | Provider demo fails on another machine | Preflight libvirt connectivity; pin catalog; document prerequisites; clean failure messages. |
-| Scope creep from EC2 or extra resources | Misses the 2-month date | "Won't ship" list is binding; stretch work only after M6 gate. |
+| Scope creep from EC2 or extra resources | Misses the 2-month date | Build the four core executors first; "Won't ship" list is binding; stretch work only after M6 gate. |
 | Secrets leak into logs/state | Security incident | Redaction tests; hash file content; never serialize credentials. |
 | Verification is mistaken for apply success | False confidence | Verification is mandatory and separate; exit code reflects verification, not command exit. |
 
@@ -895,15 +904,16 @@ The current `internal/vm-provisoner` directory is a placeholder and should be re
 
 In rough priority order:
 
-1. **EC2 provider** behind the existing provider interface.
-2. **Remote state and locking** for team use.
-3. **Drift detection and scheduled runs** with notifications.
-4. **More resources:** package repositories, templates, mounts, cron, sysctl, `exec` with explicit semantics.
-5. **Advanced firewall support:** zones, rich rules, nftables.
-6. **Secrets integration:** Vault, AWS Secrets Manager, SOPS.
-7. **Policy and approvals** for production applies.
-8. **Web UI / API** on top of the same engine.
-9. **Additional platforms** and container targets.
+1. **Deferred should-ship work:** full run history, multi-target fan-out, bounded parallelism, and the `group`, `directory`, and `firewall` executors.
+2. **EC2 provider** behind the existing provider interface.
+3. **Remote state and locking** for team use.
+4. **Drift detection and scheduled runs** with notifications.
+5. **More resources:** package repositories, templates, mounts, cron, sysctl, `exec` with explicit semantics.
+6. **Advanced firewall support:** zones, rich rules, nftables.
+7. **Secrets integration:** Vault, AWS Secrets Manager, SOPS.
+8. **Policy and approvals** for production applies.
+9. **Web UI / API** on top of the same engine.
+10. **Additional platforms** and container targets.
 
 ---
 
@@ -917,11 +927,11 @@ In rough priority order:
 | Config kinds | Split `Machine` and `Server` (ADR-001) | M0 |
 | Live inspection in `plan` | Yes by default; `--offline` for structure only | M1 |
 | State format | Versioned JSON under XDG state directory | M1 |
-| Firewall default | Auto-detect; fail clearly for unknown backends | M4 |
+| Firewall default | Auto-detect; fail clearly for unknown backends; should-ship only | M4 if implemented |
 | Package versions | Installed-state only in `v0.1.0`; version pinning as stretch | M3 |
 | Sudo model | Passwordless `sudo -n` only in `v0.1.0` | M2 |
-| Parallelism default | `min(4, independent resources)` | M5 |
-| Multi-target definition | Multiple targets in one run with per-target isolation | M5 |
+| Parallelism default | Sequential must-ship; `min(4, independent resources)` if the should-ship feature lands | Post-M6 if deferred |
+| Multi-target definition | Multiple targets in one run with per-target isolation; should-ship only | Post-M6 if deferred |
 
 ---
 
