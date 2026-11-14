@@ -20,7 +20,7 @@ This file tracks small, verifiable increments. Each checkpoint has a clear goal,
 | C2 | CLI root, `version`, and help | M0 | done | `834cc1b` |
 | C3 | Config type model and strict YAML decoding | M1 | done | pending commit |
 | C4 | Validation rules and `kamui validate` | M1 | todo | — |
-| C5 | Resource registry and dependency DAG | M1 | todo | — |
+| C5 | Dependency graph and topological sort | M1 | todo | — |
 | C6 | `kamui plan --offline` and golden tests | M1 | todo | — |
 
 ---
@@ -241,23 +241,39 @@ feat(config): validate desired-state documents
 
 ---
 
-## C5 — Resource registry and dependency DAG
+## C5 — Dependency graph and topological sort
 
-**Goal:** turn validated resources into a stable execution order.
+**Goal:** turn validated `[]config.Resources` into a stable execution order.
+
+**Scope clarification**
+
+- No registry and no executor interface are needed in this checkpoint.
+  `config.Resources` is the data model. The `Resource` interface with
+  `Check`/`Plan`/`Apply`/`Verify` belongs to the executor work in C8.
+- Use explicit `depends_on` edges only. Automatic dependency inference is
+  deferred until it is actually needed.
+- Kahn's algorithm (BFS-style) is the right fit. It detects cycles naturally:
+  if the output contains fewer nodes than the input, a cycle exists.
 
 **Steps**
 
-- Define the `Resource` interface with `ID`, `Type`, `DependsOn`, `Check`,
-  `Plan`, `Apply`, and `Verify`.
-- Add a resource registry keyed by type.
-- Add explicit `depends_on` edges and conservative inference.
-- Implement cycle detection and dangling-edge validation.
-- Implement stable topological sort.
-- Add table-driven graph tests, including cycles and independent branches.
+- Validate that IDs are non-empty and unique, and every dependency exists.
+- Build an adjacency list of dependants and an indegree count per resource.
+- Seed a queue with every resource that has indegree zero, in original config
+  order.
+- Pop a node, append it to the result, and decrement the indegree of each
+  dependant. Enqueue newly ready nodes.
+- Keep the order deterministic by using the original list index as the
+  tie-breaker when multiple nodes are ready.
+- If the result length is less than the resource count, return a cycle error
+  naming the remaining resource IDs.
+- Add table-driven tests for a linear chain, a diamond, independent branches,
+  duplicate IDs, dangling dependencies, a cycle, and an empty list.
 
 **Acceptance**
 
-- The canonical example produces the expected order.
+- The canonical `server.yaml` orders `base-packages` before `nginx-config`
+  and `nginx-service`, while `admin-user` remains in stable original order.
 - A cycle returns a clear error naming the participating resources.
 - Independent resources have a deterministic order.
 - `go test ./internal/plan/...` passes.
@@ -265,7 +281,7 @@ feat(config): validate desired-state documents
 **Suggested commit**
 
 ```text
-feat(plan): add resource registry and dependency graph
+feat(plan): add dependency graph and topological sort
 ```
 
 ---

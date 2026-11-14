@@ -5,12 +5,12 @@ const APIVersion = "kamui/v1"
 
 type Config struct {
 	APIVersion string   `yaml:"apiVersion"`
-	Metadata   Metadata `yaml:"metadata"`
 	Kind       string   `yaml:"kind"`
+	Metadata   Metadata `yaml:"metadata"`
 	Spec       any      `yaml:"spec"`
 }
 
-type document[T any] struct {
+type configDocument[T any] struct {
 	APIVersion string   `yaml:"apiVersion"`
 	Kind       string   `yaml:"kind"`
 	Metadata   Metadata `yaml:"metadata"`
@@ -55,7 +55,7 @@ type NetworkSpec struct {
 	Mode string `yaml:"mode"`
 }
 
-type Resources struct {
+type Resource struct {
 	ID                string   `yaml:"id"`
 	Type              string   `yaml:"type"`
 	Name              string   `yaml:"name,omitempty"`
@@ -98,6 +98,6 @@ type Become struct {
 }
 
 type ServerSpec struct {
-	Target    Target      `yaml:"target"`
-	Resources []Resources `yaml:"resources"`
+	Target    Target     `yaml:"target"`
+	Resources []Resource `yaml:"resources"`
 }

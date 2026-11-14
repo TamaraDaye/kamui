@@ -10,18 +10,37 @@ import (
 )
 
 func decodeKind[T any](data []byte) (*Config, error) {
-	var doc document[T]
+	var configDoc configDocument[T]
 
-	if err := decodeStrict(data, &doc); err != nil {
+	if err := decodeStrict(data, &configDoc); err != nil {
 		return nil, err
 	}
 
-	return &Config{
-		APIVersion: doc.APIVersion,
-		Kind:       doc.Kind,
-		Metadata:   doc.Metadata,
-		Spec:       doc.Spec,
+	return &Config {
+		APIVersion: configDoc.APIVersion, 
+		Kind: configDoc.Kind,
+		Metadata: configDoc.Metadata,
+		Spec: &configDoc.Spec,
 	}, nil
+
+}
+
+func Validate(configs []string) ([]*Config, error) {
+	validConfigs := make([]*Config, len(configs))
+
+
+	for _, file := range configs {
+		config, err := Load(file)
+
+		if err != nil {
+			return nil, fmt.Errorf("invalid config specified %w", err)
+		}
+
+		validConfigs = append(validConfigs, config)
+	}
+
+	return validConfigs, nil
+	
 }
 
 func Load(path string) (*Config, error) {
@@ -33,7 +52,7 @@ func Load(path string) (*Config, error) {
 
 	defer f.Close()
 
-	cfg, err := Parse(f)
+	cfg, err := parse(f)
 
 	if err != nil {
 		return nil, fmt.Errorf("could not load config %w", err)
@@ -42,7 +61,7 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-func Parse(r io.Reader) (*Config, error) {
+func parse(r io.Reader) (*Config, error) {
 	data, err := io.ReadAll(r)
 
 	if err != nil {
@@ -62,15 +81,46 @@ func Parse(r io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("unsupported apiVersion %q", header.APIVersion)
 	}
 
+
+	if header.Kind != "Machine" || header.Kind != "Server" {
+		return nil, fmt.Errorf("unsupported provisioning kind %q", header.Kind)
+	}
+
+
+	var (
+		config *Config 
+	)
+
+
 	switch header.Kind {
 	case "Machine":
-		return decodeKind[MachineSpec](data)
+		config, err = decodeKind[MachineSpec](data)
 	case "Server":
-		return decodeKind[ServerSpec](data)
+		config, err = decodeKind[ServerSpec](data)
 	default:
 		return nil, fmt.Errorf("invalid machine kind specified %q", header.Kind)
 
 	}
+
+	if err != nil {
+		return nil, fmt.Errorf("could not parse config %w", err)
+	}
+
+
+	switch config.Spec.(type) {
+
+	case *MachineSpec:
+		spec := config.Spec.(*MachineSpec)
+		validateMachineSpec(spec)
+
+	case *ServerSpec: 
+		spec := config.Spec.(*ServerSpec)
+		validateServerSpec(spec)
+	}
+
+
+	return config, nil
+
 }
 
 func decodeStrict(data []byte, out any) error {
@@ -83,5 +133,33 @@ func decodeStrict(data []byte, out any) error {
 	if err := decoder.Decode(out); err != nil {
 		return err
 	}
+	return nil
+}
+
+
+
+func validateServerSpec(spec *ServerSpec) error {
+
+	id := make(map[string]struct{})
+
+	for _, resource := range spec.Resources {
+		if resource.ID == "" {
+			return fmt.Errorf("unspecified resource id(s)")
+		}
+		if _, seen := id[resource.ID]; seen {
+			return fmt.Errorf("resource specified twice confliciting (ids)")
+		} 
+
+
+
+		id[resource.ID] = struct{}{}
+	}
+	return nil
+}
+
+
+func validateMachineSpec(spec *MachineSpec) error {
+
+
 	return nil
 }

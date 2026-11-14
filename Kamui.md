@@ -194,7 +194,7 @@ This separation is the architectural answer to "independent of how the machine w
 |---|---|
 | `internal/cli` | Parse commands/flags, load config, render output, map errors to exit codes. |
 | `internal/config` | Strict YAML decode, defaults, validation, typed resource model. |
-| `internal/plan` | Build the resource graph, infer/validate dependencies, topologically sort, produce actions. |
+| `internal/plan` | Build the explicit dependency graph, validate edges, topologically sort, produce actions. |
 | `internal/engine` | Execute plans, enforce ordering, collect results, handle cancellation, and optionally add bounded parallelism. |
 | `internal/resource/*` | One package per resource type; implements `Check`, `Plan`, `Apply`, `Verify`. |
 | `internal/transport/ssh` | Connection lifecycle, command execution, file upload/download, sudo wrapper. |
@@ -369,15 +369,9 @@ Planned after `v0.1.0`: `package_repo`, `template`, `mount`, `cron`, `sysctl`, a
 
 ### 6.5 Dependency handling
 
-The planner uses two sources of order:
+For `v0.1.0`, the planner uses **explicit `depends_on` edges only**. Automatic inference is deferred until a real need appears; implicit ordering is harder to explain and debug.
 
-1. **Explicit** `depends_on` edges from the config.
-2. **Inferred** edges where correctness requires them, for example:
-   - a service depends on the package that provides it when names match;
-   - a file depends on its parent directory resource when one is declared;
-   - a firewall rule that opens a service port depends on the service only if declared.
-
-Inference is conservative and always visible in `plan` output. If an inferred edge is wrong, the user can override it with explicit `depends_on`. Cycles are always a validation error.
+If inference is added later, it must be conservative and always visible in `plan` output. Examples would include a service depending on the package that provides it when names match, or a file depending on a declared parent directory. Users must be able to override inferred edges with explicit `depends_on`. Cycles are always a validation error.
 
 ---
 
@@ -771,8 +765,8 @@ Should-ship tests, required only if the feature is implemented:
 
 - Strict YAML decoding with unknown-field rejection and line-aware errors.
 - Defaults and validation for both `Server` and `Machine` kinds.
-- Resource registry and per-type schemas.
-- Dependency graph: explicit edges, conservative inference, cycle detection, topological sort.
+- Per-type resource schemas and validation.
+- Dependency graph: explicit `depends_on` edges, cycle detection, stable topological sort.
 - Action selection: `noop`, `create`, `update`, `delete`, `replace`.
 - Human and JSON plan rendering.
 - `kamui validate` and `kamui plan --offline`.
